@@ -15,7 +15,7 @@ class Config:
     img_url_calculator: str
     welcome_description: str
     api_ton: str
-    wallet_seed: str  # Изменено с mnemonic: List[str]
+    wallet_seed: str 
     fragment_cookies: Dict[str, str]
     fragment_hash: str
     fragment_public_key: str
@@ -37,7 +37,6 @@ def load_config(path: str = ".env"):
     admin_ids_str = os.getenv("ADMIN_IDS", "")
     admin_ids_list = [int(admin_id.strip()) for admin_id in admin_ids_str.split(',') if admin_id.strip()]
     
-    # Преобразуем MNEMONIC из "слово,слово" в "слово слово"
     mnemonic_str = os.getenv("MNEMONIC", "")
     wallet_seed_str = ' '.join([word.strip() for word in mnemonic_str.split(',') if word.strip()])
 
@@ -59,7 +58,7 @@ def load_config(path: str = ".env"):
         img_url_calculator=os.getenv("IMG_URL_CALCULATOR"),
         welcome_description=os.getenv("WELCOME_DESCRIPTION", "").replace("\\n", "\n"),
         api_ton=os.getenv("API_TON"),
-        wallet_seed=wallet_seed_str,  # Изменено
+        wallet_seed=wallet_seed_str, 
         fragment_cookies=fragment_cookies_dict,
         fragment_hash=os.getenv("FRAGMENT_HASH"),
         fragment_public_key=os.getenv("FRAGMENT_PUBLICKEY"),
@@ -74,4 +73,5 @@ def load_config(path: str = ".env"):
         ton_wallet_address=os.getenv("TON_WALLET_ADDRESS"),
         min_payment_amount=int(os.getenv("MIN_PAYMENT_AMOUNT", 10)),
         payment_timeout_seconds=int(os.getenv("PAYMENT_TIMEOUT_SECONDS", 900))
+
     )
