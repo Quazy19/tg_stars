@@ -182,7 +182,6 @@ class FragmentSender:
                 
                 if success:
                     logging.info(f"Successfully sent {quantity} stars to @{username}")
-                    # Уведомление с информацией о прибыли будет добавлено в обработчиках
                 
                 return success
 
@@ -284,7 +283,6 @@ class FragmentSender:
                 
                 if success:
                     logging.info(f"Successfully sent {months} months premium to @{username}")
-                    # Уведомление с информацией о прибыли будет добавлено в обработчиках
                 
                 return success
 
@@ -295,4 +293,5 @@ class FragmentSender:
         except Exception as e:
             logging.error(f"Premium purchase failed for @{username}: {e}")
             await self._notify_admins(f"❌ Ошибка покупки премиума для @{username}: {str(e)}")
+
             return False
