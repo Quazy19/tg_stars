@@ -11,6 +11,7 @@ from states.user import BuyPremiumStates
 from keyboards.user_kb import PREMIUM_PLANS
 from .start import format_text_with_user_data
 from config import Config
+from utils.safe_message import safe_delete_and_send_photo, safe_edit_message
 
 router = Router()
 
@@ -18,14 +19,6 @@ async def get_premium_prices(repo: Repository):
     keys = [f'premium_price_{i}' for i in range(len(PREMIUM_PLANS))]
     prices_db = await repo.get_multiple_settings(keys)
     return [float(prices_db.get(f'premium_price_{i}', plan['price'])) for i, plan in enumerate(PREMIUM_PLANS)]
-
-async def safe_delete_and_send_photo(call: types.CallbackQuery, config: Config, photo_url: str, text: str, reply_markup: types.InlineKeyboardMarkup = None):
-    try:
-        await call.message.delete()
-        await call.message.answer_photo(photo=photo_url, caption=text, reply_markup=reply_markup)
-    except Exception as e:
-        logging.error(f"Failed to delete and send photo: {e}")
-        await call.message.answer_photo(photo=photo_url, caption=text, reply_markup=reply_markup)
 
 @router.callback_query(F.data == "buy_premium")
 async def buy_premium_callback(call: types.CallbackQuery, state: FSMContext, config: Config):
@@ -41,7 +34,7 @@ async def buy_premium_self_callback(call: types.CallbackQuery, repo: Repository)
     user = await repo.get_user(call.from_user.id)
     premium_prices = await get_premium_prices(repo)
     kb = user_kb.get_premium_plans_kb(premium_prices, user["discount"], prefix="buy_premium_self_plan", back_target="buy_premium")
-    await call.message.edit_caption(caption="<b>Выберите тариф для себя:</b>", reply_markup=kb)
+    await safe_edit_message(call, text="<b>Выберите тариф для себя:</b>", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("buy_premium_self_plan_"))
 async def buy_premium_self_plan_selected(call: types.CallbackQuery, state: FSMContext, repo: Repository):
@@ -61,7 +54,7 @@ async def buy_premium_self_plan_selected(call: types.CallbackQuery, state: FSMCo
         await state.update_data(plan_index=plan_index, total=price)
         
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="✅ Подтвердить", callback_data="buy_premium_self_confirm")], [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_premium_self")]])
-    await call.message.edit_caption(caption=f"{text}\n\nПодтвердить покупку?", reply_markup=kb)
+    await safe_edit_message(call, text=f"{text}\n\nПодтвердить покупку?", reply_markup=kb)
     await state.set_state(BuyPremiumStates.waiting_for_self_confirm)
 
 @router.callback_query(BuyPremiumStates.waiting_for_self_confirm, F.data == "buy_premium_self_confirm")
@@ -78,7 +71,7 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
     user_db = await repo.get_user(user_obj.id)
 
     if float(user_db["balance"]) < total:
-        await call.message.edit_caption(caption=f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]]))
+        await safe_edit_message(call, text=f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]]))
         await state.clear()
         return
 
@@ -94,7 +87,7 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
     await repo.add_purchase_to_history(user_obj.id, 'premium', plan['name'], months, total, profit_rub)
     
     final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> успешно активирован!"
-    await call.message.edit_caption(caption=final_message, reply_markup=None)
+    await safe_edit_message(call, text=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(call.from_user.username, months)
     if success:
         profit_text = (
@@ -108,17 +101,17 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
         await fragment_sender._notify_admins(profit_text)
     else:
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await call.message.edit_caption(caption="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "buy_premium_gift")
 async def buy_premium_gift_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
-    await call.message.edit_caption(caption="<b>Пожалуйста, укажите юзернейм (@username) получателя.</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_premium")]]))
+    await safe_edit_message(call, text="<b>Пожалуйста, укажите юзернейм (@username) получателя.</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_premium")]]))
     await state.set_state(BuyPremiumStates.waiting_for_gift_recipient)
 
 @router.message(BuyPremiumStates.waiting_for_gift_recipient)
-async def process_premium_gift_recipient(message: types.Message, state: FSMContext, repo: Repository):
+async def process_premium_gift_recipient(message: types.Message, state: FSMContext, repo: Repository, config: Config):
     match = re.match(r"^@?([a-zA-Z0-9_]{5,32})$", message.text.strip())
     if not match:
         await message.answer("❗️<b>Неверный формат!</b>\n\nВведите корректный юзернейм (например, <code>@username</code>).")
@@ -130,7 +123,13 @@ async def process_premium_gift_recipient(message: types.Message, state: FSMConte
     user = await repo.get_user(message.from_user.id)
     premium_prices = await get_premium_prices(repo)
     kb = user_kb.get_premium_plans_kb(premium_prices, user["discount"], prefix="buy_premium_gift_plan", back_target="buy_premium_gift")
-    await message.answer(f"Получатель: <code>@{recipient}</code>\n\n<b>Выберите тариф для подарка:</b>", reply_markup=kb)
+    
+    await message.delete()
+    await message.answer_photo(
+        photo=config.img_url_premium,
+        caption=f"Получатель: <code>@{recipient}</code>\n\n<b>Выберите тариф для подарка:</b>", 
+        reply_markup=kb
+    )
     await state.set_state(BuyPremiumStates.waiting_for_gift_plan)
 
 @router.callback_query(BuyPremiumStates.waiting_for_gift_plan, F.data.startswith("buy_premium_gift_plan_"))
@@ -153,7 +152,7 @@ async def buy_premium_gift_plan_selected(call: types.CallbackQuery, state: FSMCo
         await state.update_data(plan_index=plan_index, total=price)
         
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="✅ Подтвердить", callback_data="buy_premium_gift_confirm")], [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_premium_gift")]])
-    await call.message.edit_caption(caption=f"{text}\n\nПодтвердить покупку?", reply_markup=kb)
+    await safe_edit_message(call, text=f"{text}\n\nПодтвердить покупку?", reply_markup=kb)
     await state.set_state(BuyPremiumStates.waiting_for_gift_confirm)
 
 @router.callback_query(BuyPremiumStates.waiting_for_gift_confirm, F.data == "buy_premium_gift_confirm")
@@ -165,7 +164,7 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     user_db = await repo.get_user(user_obj.id)
 
     if float(user_db["balance"]) < total:
-        await call.message.edit_caption(caption=f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]]))
+        await safe_edit_message(call, text=f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]]))
         await state.clear()
         return
 
@@ -181,7 +180,7 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     await repo.add_purchase_to_history(user_obj.id, 'premium', f"{plan['name']} for @{recipient}", months, total, profit_rub)
     
     final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> для <code>@{recipient}</code> успешно куплен!"
-    await call.message.edit_caption(caption=final_message, reply_markup=None)
+    await safe_edit_message(call, text=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(recipient, months)
     if success:
         profit_text = (
@@ -196,6 +195,5 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
         await fragment_sender._notify_admins(profit_text)
     else:
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await call.message.edit_caption(caption="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
-
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
