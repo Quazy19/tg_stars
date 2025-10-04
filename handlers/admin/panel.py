@@ -70,7 +70,6 @@ async def show_detailed_statistics(call: types.CallbackQuery, repo: Repository):
     profit_stats = await repo.get_profit_statistics()
     profit_calc = ProfitCalculator()
     
-    # Рассчитываем маржинальность
     day_margin = profit_calc.get_profit_margin(
         profit_stats['day_revenue'] - profit_stats['day_profit'], 
         profit_stats['day_revenue']
@@ -86,7 +85,6 @@ async def show_detailed_statistics(call: types.CallbackQuery, repo: Repository):
         profit_stats['total_revenue']
     ) if profit_stats['total_revenue'] > 0 else 0
     
-    # Получаем курс TON
     ton_rate = await profit_calc.get_ton_rub_rate()
     
     detailed_text = (
@@ -130,13 +128,11 @@ async def export_database(call: types.CallbackQuery, config: Config):
         return
     
     try:
-        # Создаем копию базы данных с временной меткой
         timestamp = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%Y-%m-%d_%H-%M-%S")
         backup_filename = f"database_export_{timestamp}.db"
         
         shutil.copy(config.database_path, backup_filename)
-        
-        # Отправляем файл
+
         document = FSInputFile(backup_filename)
         caption = f"📊 Экспорт базы данных\n🕐 {timestamp} МСК"
         
@@ -145,8 +141,7 @@ async def export_database(call: types.CallbackQuery, config: Config):
             document=document,
             caption=caption
         )
-        
-        # Удаляем временный файл
+
         os.remove(backup_filename)
         
         await call.answer("База данных выгружена", show_alert=False)
@@ -159,4 +154,5 @@ async def export_database(call: types.CallbackQuery, config: Config):
             await call.answer("Детальная статистика уже актуальна", show_alert=False)
         else:
             logging.error(f"Failed to edit detailed statistics message: {e}")
+
             await call.answer("Ошибка обновления детальной статистики", show_alert=True)
