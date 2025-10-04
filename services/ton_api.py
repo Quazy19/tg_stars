@@ -5,10 +5,9 @@ async def get_ton_balance(wallet_address: str) -> tuple[float, str | None]:
     if not wallet_address or "сюда" in wallet_address:
         return 0.0, 'Адрес кошелька не настроен'
 
-    # Если адрес это объект Address, конвертируем в строку
     address_str = str(wallet_address)
     if address_str.startswith('Address<') and address_str.endswith('>'):
-        address_str = address_str[8:-1]  # Убираем Address< и >
+        address_str = address_str[8:-1]  
 
     try:
         async with httpx.AsyncClient() as client:
@@ -24,4 +23,5 @@ async def get_ton_balance(wallet_address: str) -> tuple[float, str | None]:
             else:
                 return 0.0, f'Ошибка HTTP: {response.status_code}'
     except Exception as e:
+
         return 0.0, str(e)
