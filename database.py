@@ -46,12 +46,9 @@ async def init_db(database_path: str):
             if 'status' not in columns:
                 await db.execute("ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'")
             if 'is_paid' in columns:
-                # This is a simple migration for old versions.
-                # It marks already paid invoices correctly and sets others to pending.
                 try:
                     await db.execute("UPDATE payments SET status = 'paid' WHERE is_paid = 1 AND status = 'pending'")
-                    # We can't easily drop column in SQLite, so we just leave it.
-                    # New logic will ignore 'is_paid' completely.
+                    
                 except aiosqlite.OperationalError as e:
                     logging.warning(f"Could not migrate 'is_paid' column data: {e}")
 
@@ -69,7 +66,6 @@ async def init_db(database_path: str):
             )
         """)
         
-        # Добавляем колонку profit если её нет
         cursor = await db.execute("PRAGMA table_info(purchase_history)")
         columns = [row['name'] for row in await cursor.fetchall()]
         if 'profit' not in columns:
@@ -131,4 +127,5 @@ async def init_db(database_path: str):
 async def get_db_connection(database_path: str):
     db = await aiosqlite.connect(database_path)
     db.row_factory = aiosqlite.Row
+
     return db
