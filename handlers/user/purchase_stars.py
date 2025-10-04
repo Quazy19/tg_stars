@@ -122,7 +122,6 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
         await state.clear()
         return
         
-    # Рассчитываем прибыль
     profit_calc = ProfitCalculator()
     cost_ton, profit_rub = await profit_calc.calculate_stars_profit(amount, total)
     
@@ -140,7 +139,6 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
 
     success = await fragment_sender.send_stars(call.from_user.username, amount)
     if success:
-        # Уведомляем админов о прибыли
         profit_text = (
             f"💰 <b>Новая продажа звёзд</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -268,7 +266,6 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
         await state.clear()
         return
         
-    # Рассчитываем прибыль
     profit_calc = ProfitCalculator()
     cost_ton, profit_rub = await profit_calc.calculate_stars_profit(amount, total)
     
@@ -288,7 +285,7 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
         
     success = await fragment_sender.send_stars(recipient, amount)
     if success:
-        # Уведомляем админов о прибыли
+
         profit_text = (
             f"🎁 <b>Новый подарок звёзд</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -315,4 +312,5 @@ async def back_to_gift_choice(call: types.CallbackQuery, state: FSMContext):
         [types.InlineKeyboardButton(text="🔢 Ввести количество", callback_data="buy_stars_gift_amount"), types.InlineKeyboardButton(text="📦 Готовые паки", callback_data="buy_stars_gift_packs")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_gift")]
     ])
+
     await call.message.edit_caption(caption=f"Получатель: <code>@{recipient}</code>.\nВыберите способ:", reply_markup=kb)
