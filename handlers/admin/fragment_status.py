@@ -18,15 +18,6 @@ async def fragment_status_callback(call: types.CallbackQuery, repo: Repository, 
         auth_text = f"❌ Ошибка проверки: {str(e)[:50]}"
     
     try:
-        fragment_balance, fragment_error = await fragment_auth.get_wallet_balance()
-        if fragment_error:
-            balance_text = f"❌ {fragment_error[:50]}"
-        else:
-            balance_text = f"💎 {fragment_balance:.4f} TON"
-    except Exception as e:
-        balance_text = f"❌ Ошибка: {str(e)[:50]}"
-    
-    try:
         ton_balance, ton_error = await get_ton_balance(config.fragment_address)
         if ton_error:
             ton_balance_text = f"❌ {ton_error[:50]}"
@@ -44,7 +35,6 @@ async def fragment_status_callback(call: types.CallbackQuery, repo: Repository, 
     status_text = (
         f"<b>📊 Статус Fragment</b>\n\n"
         f"<b>Авторизация:</b> {auth_text}\n"
-        f"<b>Баланс Fragment:</b> {balance_text}\n"
         f"<b>Баланс кошелька:</b> {ton_balance_text}\n"
         f"<b>Токен:</b> {token_text}\n\n"
         f"<b>Адрес кошелька:</b>\n<code>{config.fragment_address}</code>"
