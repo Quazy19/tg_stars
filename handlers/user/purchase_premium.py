@@ -85,7 +85,6 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
     success_text_template = await repo.get_setting('purchase_success_text')
     success_text = format_text_with_user_data(success_text_template, user_obj)
     
-    # Рассчитываем прибыль
     months = plan["duration"] // 30
     profit_calc = ProfitCalculator()
     cost_ton, profit_rub = await profit_calc.calculate_premium_profit(months, total)
@@ -98,7 +97,6 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
     await call.message.edit_caption(caption=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(call.from_user.username, months)
     if success:
-        # Уведомляем админов о прибыли
         profit_text = (
             f"💎 <b>Новая продажа премиума</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -174,7 +172,6 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     success_text_template = await repo.get_setting('purchase_success_text')
     success_text = format_text_with_user_data(success_text_template, user_obj)
 
-    # Рассчитываем прибыль
     months = plan["duration"] // 30
     profit_calc = ProfitCalculator()
     cost_ton, profit_rub = await profit_calc.calculate_premium_profit(months, total)
@@ -187,7 +184,6 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     await call.message.edit_caption(caption=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(recipient, months)
     if success:
-        # Уведомляем админов о прибыли
         profit_text = (
             f"🎁 <b>Новый подарок премиума</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -201,4 +197,5 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     else:
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
         await call.message.edit_caption(caption="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
+
     await state.clear()
