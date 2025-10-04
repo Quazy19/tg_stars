@@ -33,7 +33,6 @@ class CheckSubscriptionFilter(Filter):
         repo: Repository,
         config: Config
     ) -> bool:
-        # ИСКЛЮЧЕНИЕ: всегда пропускаем нажатие на кнопку проверки
         if isinstance(event, types.CallbackQuery) and event.data == SubscribeCallback(action="check").pack():
             return True
 
@@ -62,5 +61,5 @@ class CheckSubscriptionFilter(Filter):
                 return True
         except Exception as e:
             logging.error(f"Could not check subscription for user {user.id} in channel {channel_id}: {e}")
-            # В случае ошибки API телеги, лучше пропустить пользователя, чем заблокировать
+
             return True
