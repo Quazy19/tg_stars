@@ -38,11 +38,8 @@ class FragmentAuth:
                 headers=self.base_headers,
                 timeout=10.0
             ) as client:
-                # Попробуем получить баланс через страницу кошелька
                 response = await client.get("https://fragment.com/wallet")
                 if response.status_code == 200:
-                    # Здесь можно парсить HTML для получения баланса
-                    # Пока возвращаем заглушку
                     return 0.0, "Balance parsing not implemented"
                 else:
                     return 0.0, f"HTTP {response.status_code}"
@@ -67,8 +64,6 @@ class FragmentAuth:
 
     async def _refresh_token(self, repo: Repository) -> bool:
         try:
-            # Fragment не имеет публичного API для обновления токенов
-            # Просто обновляем время последней проверки
             await repo.update_setting('fragment_token_last_update', datetime.utcnow().isoformat())
             logging.info("Fragment token check completed")
             return True
