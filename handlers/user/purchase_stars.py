@@ -11,16 +11,9 @@ from keyboards import user_kb
 from states.user import BuyStarsGiftStates, BuyStarsSelfStates, BuyStarsConfirmStates
 from .start import format_text_with_user_data
 from config import Config
+from utils.safe_message import safe_delete_and_send_photo, safe_edit_message
 
 router = Router()
-
-async def safe_delete_and_send_photo(call: types.CallbackQuery, config: Config, photo_url: str, text: str, reply_markup: types.InlineKeyboardMarkup = None):
-    try:
-        await call.message.delete()
-        await call.message.answer_photo(photo=photo_url, caption=text, reply_markup=reply_markup)
-    except Exception as e:
-        logging.error(f"Failed to delete and send photo: {e}")
-        await call.message.answer_photo(photo=photo_url, caption=text, reply_markup=reply_markup)
 
 @router.callback_query(F.data == "buy_stars")
 async def buy_stars_callback(call: types.CallbackQuery, state: FSMContext, config: Config):
@@ -37,11 +30,11 @@ async def buy_stars_self_callback(call: types.CallbackQuery, config: Config):
         [types.InlineKeyboardButton(text="🔢 Ввести количество", callback_data="buy_stars_self_amount"), types.InlineKeyboardButton(text="📦 Готовые паки", callback_data="buy_stars_self_packs")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars")]
     ])
-    await call.message.edit_caption(caption="<b>Покупка звёзд для себя</b>\n\nВыберите способ:", reply_markup=kb)
+    await safe_edit_message(call, text="<b>Покупка звёзд для себя</b>\n\nВыберите способ:", reply_markup=kb)
 
 @router.callback_query(F.data == "buy_stars_self_amount")
 async def buy_stars_self_amount_callback(call: types.CallbackQuery, state: FSMContext):
-    await call.message.edit_caption(caption="<b>Введите количество звёзд для покупки (минимум 50):</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_self")]]))
+    await safe_edit_message(call, text="<b>Введите количество звёзд для покупки (минимум 50):</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_self")]]))
     await state.set_state(BuyStarsSelfStates.waiting_for_self_amount)
 
 @router.message(BuyStarsSelfStates.waiting_for_self_amount)
@@ -78,7 +71,7 @@ async def buy_stars_self_packs_callback(call: types.CallbackQuery, repo: Reposit
     page = int(call.data.split("_")[-1]) if "page" in call.data else 0
     user = await repo.get_user(call.from_user.id)
     star_price = float(await repo.get_setting('star_price'))
-    await call.message.edit_caption(caption="<b>Выберите готовый пакет звёзд:</b>", reply_markup=user_kb.get_star_packs_kb(page, "buy_stars_self", star_price, user["discount"], back_target="buy_stars_self"))
+    await safe_edit_message(call, text="<b>Выберите готовый пакет звёзд:</b>", reply_markup=user_kb.get_star_packs_kb(page, "buy_stars_self", star_price, user["discount"], back_target="buy_stars_self"))
 
 @router.callback_query(F.data.startswith("buy_stars_self_pack_"))
 async def buy_stars_self_pack_selected(call: types.CallbackQuery, state: FSMContext, repo: Repository):
@@ -97,7 +90,7 @@ async def buy_stars_self_pack_selected(call: types.CallbackQuery, state: FSMCont
         await state.update_data(amount=amount, total=total)
         
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="✅ Подтвердить", callback_data="buy_stars_self_confirm")], [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_self_packs")]])
-    await call.message.edit_caption(caption=f"{price_text}\n\nПодтвердить покупку?", reply_markup=kb)
+    await safe_edit_message(call, text=f"{price_text}\n\nПодтвердить покупку?", reply_markup=kb)
     await state.set_state(BuyStarsConfirmStates.waiting_for_confirm)
 
 @router.callback_query(BuyStarsConfirmStates.waiting_for_confirm, F.data == "buy_stars_self_confirm")
@@ -115,10 +108,7 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
     if float(user_db["balance"]) < total:
         error_message = f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>"
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]])
-        try:
-            await call.message.edit_caption(caption=error_message, reply_markup=error_kb)
-        except TelegramBadRequest:
-            await call.message.edit_text(text=error_message, reply_markup=error_kb)
+        await safe_edit_message(call, text=error_message, reply_markup=error_kb)
         await state.clear()
         return
         
@@ -132,10 +122,7 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
     await repo.update_user_discount(user_obj.id, None)
     await repo.add_purchase_to_history(user_obj.id, 'stars', f'{amount} Stars', amount, total, profit_rub)
     
-    try:
-        await call.message.edit_caption(caption=success_text, reply_markup=None)
-    except TelegramBadRequest:
-        await call.message.edit_text(text=success_text, reply_markup=None)
+    await safe_edit_message(call, text=success_text, reply_markup=None)
 
     success = await fragment_sender.send_stars(call.from_user.username, amount)
     if success:
@@ -150,20 +137,17 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
         await fragment_sender._notify_admins(profit_text)
     else:
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        try:
-            await call.message.edit_caption(caption="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
-        except:
-            await call.message.edit_text(text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "buy_stars_gift")
 async def buy_stars_gift_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
-    await call.message.edit_caption(caption="<b>Пожалуйста, укажите юзернейм (@username) получателя.</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars")]]))
+    await safe_edit_message(call, text="<b>Пожалуйста, укажите юзернейм (@username) получателя.</b>", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars")]]))
     await state.set_state(BuyStarsGiftStates.waiting_for_recipient)
 
 @router.message(BuyStarsGiftStates.waiting_for_recipient)
-async def process_gift_recipient(message: types.Message, state: FSMContext):
+async def process_gift_recipient(message: types.Message, state: FSMContext, config: Config):
     match = re.match(r"^@?([a-zA-Z0-9_]{5,32})$", message.text.strip())
     if not match:
         await message.answer("❗️<b>Неверный формат!</b>\n\nВведите корректный юзернейм (например, <code>@username</code>).")
@@ -176,13 +160,19 @@ async def process_gift_recipient(message: types.Message, state: FSMContext):
         [types.InlineKeyboardButton(text="🔢 Ввести количество", callback_data="buy_stars_gift_amount"), types.InlineKeyboardButton(text="📦 Готовые паки", callback_data="buy_stars_gift_packs")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_gift")]
     ])
-    await message.answer(f"Получатель: <code>@{recipient}</code>.\nВыберите способ:", reply_markup=kb)
+    
+    await message.delete()
+    await message.answer_photo(
+        photo=config.img_url_stars,
+        caption=f"Получатель: <code>@{recipient}</code>.\nВыберите способ:", 
+        reply_markup=kb
+    )
 
 @router.callback_query(F.data == "buy_stars_gift_amount")
 async def buy_stars_gift_amount_callback(call: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_gift_choice")]])
-    await call.message.edit_caption(caption=f"Получатель: <code>@{data.get('recipient')}</code>\n\n<b>Введите количество звёзд для подарка (минимум 50):</b>", reply_markup=kb)
+    await safe_edit_message(call, text=f"Получатель: <code>@{data.get('recipient')}</code>\n\n<b>Введите количество звёзд для подарка (минимум 50):</b>", reply_markup=kb)
     await state.set_state(BuyStarsGiftStates.waiting_for_gift_amount)
 
 @router.callback_query(F.data == "buy_stars_gift_packs")
@@ -195,7 +185,7 @@ async def buy_stars_gift_packs_callback(call: types.CallbackQuery, state: FSMCon
     
     text = f"Получатель: <code>@{data.get('recipient')}</code>\n\n<b>Выберите пакет звёзд для подарка:</b>"
     kb = user_kb.get_star_packs_kb(page, "buy_stars_gift", star_price, user["discount"], back_target="back_to_gift_choice")
-    await call.message.edit_caption(caption=text, reply_markup=kb)
+    await safe_edit_message(call, text=text, reply_markup=kb)
 
 @router.callback_query(F.data.startswith("buy_stars_gift_pack_"))
 async def buy_stars_gift_pack_selected(call: types.CallbackQuery, state: FSMContext, repo: Repository):
@@ -216,7 +206,7 @@ async def buy_stars_gift_pack_selected(call: types.CallbackQuery, state: FSMCont
         await state.update_data(amount=amount, total=total)
         
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="✅ Подтвердить", callback_data="buy_stars_gift_confirm")], [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_gift_packs")]])
-    await call.message.edit_caption(caption=f"{price_text}\n\nПодтвердить покупку?", reply_markup=kb)
+    await safe_edit_message(call, text=f"{price_text}\n\nПодтвердить покупку?", reply_markup=kb)
     await state.set_state(BuyStarsConfirmStates.waiting_for_gift_confirm)
 
 @router.message(BuyStarsGiftStates.waiting_for_gift_amount)
@@ -259,10 +249,7 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
     if float(user_db["balance"]) < total:
         error_message = f"Недостаточно средств! Не хватает: <b>{total - float(user_db['balance'])}₽</b>"
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="profile_topup")]])
-        try:
-            await call.message.edit_caption(caption=error_message, reply_markup=error_kb)
-        except TelegramBadRequest:
-            await call.message.edit_text(text=error_message, reply_markup=error_kb)
+        await safe_edit_message(call, text=error_message, reply_markup=error_kb)
         await state.clear()
         return
         
@@ -278,14 +265,10 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
 
     final_message = f"{success_text}\n\nПодарок для <code>@{recipient}</code> на <b>{amount} звёзд</b> успешно отправлен!"
     
-    try:
-        await call.message.edit_caption(caption=final_message, reply_markup=None)
-    except TelegramBadRequest:
-        await call.message.edit_text(text=final_message, reply_markup=None)
+    await safe_edit_message(call, text=final_message, reply_markup=None)
         
     success = await fragment_sender.send_stars(recipient, amount)
     if success:
-
         profit_text = (
             f"🎁 <b>Новый подарок звёзд</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -298,19 +281,20 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
         await fragment_sender._notify_admins(profit_text)
     else:
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        try:
-            await call.message.edit_caption(caption="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
-        except:
-            await call.message.edit_text(text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "back_to_gift_choice")
-async def back_to_gift_choice(call: types.CallbackQuery, state: FSMContext):
+async def back_to_gift_choice(call: types.CallbackQuery, state: FSMContext, config: Config):
     data = await state.get_data()
     recipient = data.get('recipient')
     kb = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text="🔢 Ввести количество", callback_data="buy_stars_gift_amount"), types.InlineKeyboardButton(text="📦 Готовые паки", callback_data="buy_stars_gift_packs")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="buy_stars_gift")]
     ])
-
-    await call.message.edit_caption(caption=f"Получатель: <code>@{recipient}</code>.\nВыберите способ:", reply_markup=kb)
+    await call.message.delete()
+    await call.message.answer_photo(
+        photo=config.img_url_stars,
+        caption=f"Получатель: <code>@{recipient}</code>.\nВыберите способ:", 
+        reply_markup=kb
+    )
