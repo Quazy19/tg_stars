@@ -119,13 +119,14 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
     success_text = format_text_with_user_data(success_text_template, user_obj)
     
     await repo.update_user_balance(user_obj.id, total, operation='sub')
-    await repo.update_user_discount(user_obj.id, None)
-    await repo.add_purchase_to_history(user_obj.id, 'stars', f'{amount} Stars', amount, total, profit_rub)
     
-    await safe_edit_message(call, text=success_text, reply_markup=None)
-
     success = await fragment_sender.send_stars(call.from_user.username, amount)
+    
     if success:
+        await repo.update_user_discount(user_obj.id, None)
+        await repo.add_purchase_to_history(user_obj.id, 'stars', f'{amount} Stars', amount, total, profit_rub)
+        await safe_edit_message(call, text=success_text, reply_markup=None)
+        
         profit_text = (
             f"💰 <b>Новая продажа звёзд</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -136,8 +137,9 @@ async def buy_stars_self_confirm_callback(call: types.CallbackQuery, state: FSMC
         )
         await fragment_sender._notify_admins(profit_text)
     else:
+        await repo.update_user_balance(user_obj.id, total, operation='add')
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Средства возвращены на ваш баланс. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "buy_stars_gift")
@@ -260,15 +262,15 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
     success_text = format_text_with_user_data(success_text_template, user_obj)
     
     await repo.update_user_balance(user_obj.id, total, operation='sub')
-    await repo.update_user_discount(user_obj.id, None)
-    await repo.add_purchase_to_history(user_obj.id, 'stars', f'{amount} Stars for @{recipient}', amount, total, profit_rub)
-
-    final_message = f"{success_text}\n\nПодарок для <code>@{recipient}</code> на <b>{amount} звёзд</b> успешно отправлен!"
     
-    await safe_edit_message(call, text=final_message, reply_markup=None)
-        
     success = await fragment_sender.send_stars(recipient, amount)
+    
     if success:
+        await repo.update_user_discount(user_obj.id, None) 
+        await repo.add_purchase_to_history(user_obj.id, 'stars', f'{amount} Stars for @{recipient}', amount, total, profit_rub)
+        final_message = f"{success_text}\n\nПодарок для <code>@{recipient}</code> на <b>{amount} звёзд</b> успешно отправлен!"
+        await safe_edit_message(call, text=final_message, reply_markup=None)
+        
         profit_text = (
             f"🎁 <b>Новый подарок звёзд</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -280,8 +282,9 @@ async def buy_stars_gift_confirm_callback(call: types.CallbackQuery, state: FSMC
         )
         await fragment_sender._notify_admins(profit_text)
     else:
+        await repo.update_user_balance(user_obj.id, total, operation='add')
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке звёзд. Средства возвращены на ваш баланс. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "back_to_gift_choice")
