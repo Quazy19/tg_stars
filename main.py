@@ -153,10 +153,15 @@ async def backup_database(bot: Bot, config: Config):
 
 async def start_bot():
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    
+
     config = load_config()
-    if not config.admin_ids or not config.bot_token:
-        logging.critical("ADMIN_IDS or BOT_TOKEN is not set.")
+    
+    if not config.admin_ids:
+        logging.critical("ADMIN_IDS is not set or contains no valid IDs. Please check your .env file.")
+        sys.exit(1)
+        
+    if not config.bot_token:
+        logging.critical("BOT_TOKEN is not set. Please check your .env file.")
         sys.exit(1)
     
     required_fragment_fields = [
