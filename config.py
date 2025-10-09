@@ -1,7 +1,10 @@
 import os
 from dataclasses import dataclass
 from typing import List, Dict
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Config:
@@ -32,10 +35,32 @@ class Config:
     payment_timeout_seconds: int
 
 def load_config(path: str = ".env"):
-    load_dotenv(dotenv_path=path)
+    dotenv_path = find_dotenv(path, usecwd=True)
+    if dotenv_path:
+        logging.info(f"Configuration: Found and loading .env file at: {dotenv_path}")
+        load_dotenv(dotenv_path=dotenv_path)
+    else:
+        logging.warning("Configuration: .env file not found. Relying on system environment variables.")
 
-    admin_ids_str = os.getenv("ADMIN_IDS", "")
-    admin_ids_list = [int(admin_id.strip()) for admin_id in admin_ids_str.split(',') if admin_id.strip()]
+    admin_ids_str_raw = os.getenv("ADMIN_IDS")
+    bot_token_raw = os.getenv("BOT_TOKEN")
+    
+    admin_ids_str = admin_ids_str_raw if admin_ids_str_raw is not None else ""
+    
+    admin_ids_list = []
+    if admin_ids_str:
+        clean_str = admin_ids_str.replace(' ', '').replace(';', ',').replace('|', ',')
+        parts = [part.strip() for part in clean_str.split(',') if part.strip()]
+        
+        for part in parts:
+            try:
+                admin_ids_list.append(int(part))
+            except ValueError:
+                logging.warning(f"Configuration Warning: Invalid non-integer ADMIN_ID skipped: '{part}'")
+    
+    if admin_ids_list:
+        logging.info(f"DEBUG: ADMIN_IDS (Parsed) = {admin_ids_list}")
+            
     
     mnemonic_str = os.getenv("MNEMONIC", "")
     wallet_seed_str = ' '.join([word.strip() for word in mnemonic_str.split(',') if word.strip()])
@@ -49,7 +74,7 @@ def load_config(path: str = ".env"):
 
     return Config(
         admin_ids=admin_ids_list,
-        bot_token=os.getenv("BOT_TOKEN"),
+        bot_token=bot_token_raw,
         database_path=os.getenv("DATABASE_PATH", "database.db"),
         img_url_main=os.getenv("IMG_URL_MAIN"),
         img_url_stars=os.getenv("IMG_URL_STARS"),
