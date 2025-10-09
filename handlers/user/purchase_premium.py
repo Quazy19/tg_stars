@@ -83,13 +83,15 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
     cost_ton, profit_rub = await profit_calc.calculate_premium_profit(months, total)
     
     await repo.update_user_balance(user_obj.id, total, operation='sub')
-    await repo.update_user_discount(user_obj.id, None)
-    await repo.add_purchase_to_history(user_obj.id, 'premium', plan['name'], months, total, profit_rub)
     
-    final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> успешно активирован!"
-    await safe_edit_message(call, text=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(call.from_user.username, months)
+    
     if success:
+        await repo.update_user_discount(user_obj.id, None) 
+        await repo.add_purchase_to_history(user_obj.id, 'premium', plan['name'], months, total, profit_rub)
+        final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> успешно активирован!"
+        await safe_edit_message(call, text=final_message, reply_markup=None)
+        
         profit_text = (
             f"💎 <b>Новая продажа премиума</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -100,8 +102,9 @@ async def buy_premium_self_confirm_callback(call: types.CallbackQuery, state: FS
         )
         await fragment_sender._notify_admins(profit_text)
     else:
+        await repo.update_user_balance(user_obj.id, total, operation='add')
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Средства возвращены на ваш баланс. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
 
 @router.callback_query(F.data == "buy_premium_gift")
@@ -176,13 +179,15 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
     cost_ton, profit_rub = await profit_calc.calculate_premium_profit(months, total)
     
     await repo.update_user_balance(user_obj.id, total, operation='sub')
-    await repo.update_user_discount(user_obj.id, None)
-    await repo.add_purchase_to_history(user_obj.id, 'premium', f"{plan['name']} for @{recipient}", months, total, profit_rub)
     
-    final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> для <code>@{recipient}</code> успешно куплен!"
-    await safe_edit_message(call, text=final_message, reply_markup=None)
     success = await fragment_sender.send_premium(recipient, months)
+    
     if success:
+        await repo.update_user_discount(user_obj.id, None) 
+        await repo.add_purchase_to_history(user_obj.id, 'premium', f"{plan['name']} for @{recipient}", months, total, profit_rub)
+        final_message = f"{success_text}\n\nПремиум <b>{plan['name']}</b> для <code>@{recipient}</code> успешно куплен!"
+        await safe_edit_message(call, text=final_message, reply_markup=None)
+
         profit_text = (
             f"🎁 <b>Новый подарок премиума</b>\n\n"
             f"👤 Покупатель: @{call.from_user.username}\n"
@@ -194,6 +199,7 @@ async def buy_premium_gift_confirm_callback(call: types.CallbackQuery, state: FS
         )
         await fragment_sender._notify_admins(profit_text)
     else:
+        await repo.update_user_balance(user_obj.id, total, operation='add')
         error_kb = types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]])
-        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Обратитесь в поддержку.", reply_markup=error_kb)
+        await safe_edit_message(call, text="❌ Произошла ошибка при отправке премиума. Средства возвращены на ваш баланс. Обратитесь в поддержку.", reply_markup=error_kb)
     await state.clear()
