@@ -52,12 +52,12 @@ class PaymentChecker:
     async def process_single_payment(self, payment: dict):
         try:
             payment_method, invoice_id = payment['payment_method'], payment['invoice_id']
-            payload_id, user_id, amount = payment.get('payload_id'), payment['user_id'], payment['amount']
+            payload_id = payment.get('payload_id')
             
             expires_at = datetime.fromisoformat(payment['expires_at'])
             if datetime.now() > expires_at:
                 if await self.repo.update_payment_status(invoice_id, "expired"):
-                    await self.notify_user_payment_expired(user_id, invoice_id)
+                    await self.notify_user_payment_expired(payment['user_id'], invoice_id)
                 return
             
             payment_handler = self.payment_handlers.get(payment_method)
@@ -77,11 +77,46 @@ class PaymentChecker:
                 return
             
             if status_result.get("status") == "paid":
-                if await self.repo.process_successful_payment(invoice_id):
-                    await self.notify_user_payment_success(user_id, amount, invoice_id)
-                    logger.info(f"Платеж {invoice_id} успешно обработан, зачислено {amount} ₽")
+                processed_payment = await self.repo.process_successful_payment(invoice_id)
+                if processed_payment:
+                    logger.info(f"Платеж {invoice_id} успешно обработан, зачислено {processed_payment['amount']} ₽")
+                    await self.notify_user_payment_success(processed_payment['user_id'], processed_payment['amount'], invoice_id)
+                    await self._notify_admin_payment_success(processed_payment)
+
         except Exception as e:
             logger.error(f"Ошибка обработки платежа {payment.get('invoice_id', 'unknown')}: {e}")
+
+    async def _notify_admin_payment_success(self, payment: dict):
+        try:
+            user = await self.repo.get_user(payment['user_id'])
+            if not user:
+                return
+
+            method_names = {
+                "lolz": "🔥 Lolz", 
+                "cryptobot": "🤖 CryptoBot", 
+                "xrocet": "🚀 xRocet", 
+                "crystalpay": "💎 CrystalPay"
+            }
+            payment_system_name = method_names.get(payment['payment_method'], payment['payment_method'].capitalize())
+            
+            log_text = (
+                f"<b>✅ Новое пополнение!</b>\n\n"
+                f"👤 <b>Пользователь:</b> @{user['username']} (<code>{user['telegram_id']}</code>)\n"
+                f"💳 <b>Способ:</b> {payment_system_name}\n\n"
+                f"💰 <b>Сумма:</b> {payment['amount']:.2f} ₽\n"
+                f"💸 <b>Комиссия:</b> {payment.get('fee_amount', 0.0):.2f} ₽\n"
+                f"📈 <b>Итого:</b> {payment.get('total_amount', payment['amount']):.2f} ₽\n\n"
+                f"🏦 <b>Новый баланс:</b> {user['balance']:.2f} ₽"
+            )
+
+            for admin_id in self.config.bot.admin_ids:
+                try:
+                    await self.bot.send_message(admin_id, log_text)
+                except Exception as e:
+                    logger.error(f"Не удалось отправить лог пополнения админу {admin_id}: {e}")
+        except Exception as e:
+            logger.error(f"Ошибка при создании лога для админа: {e}")
     
     async def notify_user_payment_success(self, user_id: int, amount: float, invoice_id: str):
         try:
@@ -110,7 +145,6 @@ class PaymentChecker:
             if payment_data and payment_data.get('message_id') and payment_data.get('chat_id'):
                 await self.bot.edit_message_text(text=f"⏰ <b>Время действия счета истекло</b>\n\n📄 ID счета: <code>{invoice_id}</code>", chat_id=payment_data['chat_id'], message_id=payment_data['message_id'], reply_markup=get_main_menu_only_keyboard())
         except Exception:
-            # Просто затыкаемся, если не можем отредактировать
             pass
     
     def stop_checking(self):
