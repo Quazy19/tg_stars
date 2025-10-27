@@ -1,0 +1,11 @@
+aiogram==3.5.0
+aiosqlite
+python-dotenv
+httpx
+aiohttp
+apscheduler
+pytz
+tonutils
+requests
+beautifulsoup4
+lolzteam
