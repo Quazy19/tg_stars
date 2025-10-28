@@ -34,7 +34,8 @@ class LolzPayment:
                 "is_test": False
             }
             
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.post(
                     f"{self.base_url}/invoice",
                     headers=headers,
@@ -83,7 +84,8 @@ class LolzPayment:
                 "Content-Type": "application/json"
             }
             
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(
                     f"{self.base_url}/invoice/{invoice_id}",
                     headers=headers
